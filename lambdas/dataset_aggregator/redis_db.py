@@ -1,8 +1,10 @@
-from redis.cluster import RedisCluster as Redis
 import os
 import json
+
 import numpy as np
-from lambdas.dataset_aggregator.logger import logger
+from redis.cluster import RedisCluster as Redis
+
+from logger import logger
 
 def connect_and_get_redis_client():
     return Redis(host=os.environ.get('REDIS_HOST'), port=os.environ.get('REDIS_PORT'))
