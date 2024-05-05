@@ -25,38 +25,33 @@ def extract_event_data(record):
 
 
 def lambda_handler(event, context):
-    logger.debug(f"got event: {event}")
+    logger.debug(f"Received event: {event}")
 
     try:
         s3_client = boto3.client('s3')
         for i, record in enumerate(event['Records']):
-
             event_data = extract_event_data(record)
-
-            logger.debug(f"event_data {i}: {event_data}")
+            logger.debug(f"Event data {i}: {event_data}")
 
             response = s3_client.get_object(Bucket=event_data['bucket_name'], Key=event_data['object_key'])
             content = response['Body'].read()
-
             file_stream = BytesIO(content)
             parquet_file = pq.ParquetFile(file_stream)
 
-            total_aggregation = pd.DataFrame()
-            batch_size = os.environ.get('BATCH_SIZE')
+            batch_size = int(os.environ.get('BATCH_SIZE', 10000))
 
             for batch in parquet_file.iter_batches(batch_size=batch_size):
                 df = batch.to_pandas()
                 pivot_table = df.pivot_table(index='UserID', columns='EventType', values='EventDuration',
                                              aggfunc='sum').astype(int)
-                total_aggregation = total_aggregation.add(pivot_table, fill_value=0).astype(int)
 
-            total_aggregation['total_playtime'] = total_aggregation.sum(axis=1).astype(int)
-            grand_total = total_aggregation['total_playtime'].sum()
-            formatted_data = total_aggregation.to_dict(orient='index')
-            formatted_data['total_playtime'] = grand_total
+                # Convert Pivot Table to a dictionary suitable for Redis
+                formatted_data = pivot_table.to_dict(orient='index')
+                # Calculate total playtime for the batch
+                formatted_data['total_playtime'] = pivot_table.sum().sum()
 
-            logger.debug(f"formatted_data: {formatted_data}")
+                logger.debug(f"Formatted data for batch: {formatted_data}")
+                input_data_to_redis(formatted_data, event_data['object_etag'])
 
-            input_data_to_redis(formatted_data, etag=event_data['object_etag'])
     except Exception as e:
-        logger.error(f"dataset_aggregator lambda failed: {e}")
+        logger.error(f"Failed to process dataset aggregator lambda: {e}")
