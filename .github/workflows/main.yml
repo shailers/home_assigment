@@ -26,7 +26,7 @@ jobs:
           ${{ runner.os }}-pip-
 
     - name: Set PYTHONPATH
-      run: echo "PYTHONPATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+      run: echo "PYTHONPATH=$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/lambdas/dataset_aggregator" >> $GITHUB_ENV
 
     - name: Install dependencies
       run: |
